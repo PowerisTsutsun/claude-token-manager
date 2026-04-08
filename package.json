@@ -1,0 +1,95 @@
+{
+  "name": "claude-token-manager",
+  "displayName": "Claude Token Manager",
+  "description": "Token usage display and auto memory system for the Claude Code VS Code extension",
+  "version": "0.1.0",
+  "publisher": "PowerisTsutusn",
+  "license": "MIT",
+  "icon": "",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "claude",
+    "anthropic",
+    "tokens",
+    "context window",
+    "ai memory",
+    "claude code"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "claude-token-manager.showTokenPanel",
+        "title": "Show Token Usage Panel",
+        "category": "Claude Token Manager"
+      },
+      {
+        "command": "claude-token-manager.setApiKey",
+        "title": "Set API Key",
+        "category": "Claude Token Manager"
+      },
+      {
+        "command": "claude-token-manager.summarizeNow",
+        "title": "Summarize Session Now",
+        "category": "Claude Token Manager"
+      },
+      {
+        "command": "claude-token-manager.openMemory",
+        "title": "Open Memory File",
+        "category": "Claude Token Manager"
+      },
+      {
+        "command": "claude-token-manager.openBugFixes",
+        "title": "Open Bug Fixes",
+        "category": "Claude Token Manager"
+      },
+      {
+        "command": "claude-token-manager.searchBugFixes",
+        "title": "Search Bug Fixes",
+        "category": "Claude Token Manager"
+      },
+      {
+        "command": "claude-token-manager.clearMemory",
+        "title": "Clear Memory",
+        "category": "Claude Token Manager"
+      }
+    ],
+    "configuration": {
+      "title": "Claude Token Manager",
+      "properties": {
+        "claudeTokenManager.contextWindowSize": {
+          "type": "number",
+          "default": 200000,
+          "description": "Context window size used for the status bar percentage display. Default matches Claude Sonnet 4.5.",
+          "minimum": 1000
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc --watch -p ./",
+    "package": "vsce package",
+    "install-ext": "code --install-extension claude-token-manager-0.1.0.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.3",
+    "@vscode/vsce": "^2.24.0"
+  }
+}
