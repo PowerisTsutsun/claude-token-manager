@@ -44,7 +44,17 @@ const https = __importStar(require("https"));
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
-const CONTEXT_WINDOW = 200000;
+// Context windows by model family (all current Claude models are 200k,
+// but we keep a lookup so future models with different limits work automatically)
+const DEFAULT_CONTEXT_WINDOW = 200000;
+function getContextWindow(model) {
+    // All current Claude 3/4 models share a 200k context window.
+    // Add overrides here if a future model differs.
+    if (!model) {
+        return DEFAULT_CONTEXT_WINDOW;
+    }
+    return DEFAULT_CONTEXT_WINDOW;
+}
 const SONNET_IN_PRICE_PM = 3.0; // $ per million input  tokens (Sonnet 4.5)
 const SONNET_OUT_PRICE_PM = 15.0; // $ per million output tokens (Sonnet 4.5)
 const SESSION_IDLE_MS = 60000; // 60 s of no writes → session ended
@@ -159,10 +169,13 @@ function computeSessionStats(entries) {
             + (totalOutput / 1000000) * SONNET_OUT_PRICE_PM;
     }
     // The most recent assistant turn's input_tokens is the current context window fill.
-    const currentContextSize = assistants[assistants.length - 1].message?.usage?.input_tokens ?? 0;
+    const lastAssistant = assistants[assistants.length - 1];
+    const currentContextSize = lastAssistant.message?.usage?.input_tokens ?? 0;
+    const model = lastAssistant.message?.model ?? '';
     const timestamps = sessionEntries.filter(e => e.timestamp).map(e => e.timestamp);
     return {
         sessionId: lastSessionId,
+        model,
         inputTokens: totalInput,
         outputTokens: totalOutput,
         cacheReadTokens: totalCacheRead,
@@ -571,8 +584,9 @@ class TokenTracker {
             return;
         }
         const used = this.session.currentContextSize;
-        const pct = used / CONTEXT_WINDOW;
-        this.statusBar.text = `⚡ ${fmt(used)} / ${fmt(CONTEXT_WINDOW)} tokens`;
+        const total = getContextWindow(this.session.model);
+        const pct = used / total;
+        this.statusBar.text = `⚡ ${fmt(used)} / ${fmt(total)} tokens`;
         this.statusBar.tooltip = [
             `Session: ${this.session.sessionId.slice(0, 8)}…`,
             `Input tokens:  ${fmt(this.session.inputTokens)}`,
@@ -627,7 +641,7 @@ Start a session and token data will appear here automatically within 2 seconds.<
 </html>`;
     }
     const used = session.currentContextSize;
-    const total = CONTEXT_WINDOW;
+    const total = getContextWindow(session.model);
     const pct = Math.min(100, Math.round((used / total) * 100));
     const remain = Math.max(0, total - used);
     const barColor = pct < 50 ? '#4ec9b0' : pct < 80 ? '#cca700' : '#f48771';
@@ -708,6 +722,10 @@ Start a session and token data will appear here automatically within 2 seconds.<
 </div>
 
 <div class="card">
+  <div class="row">
+    <span class="lbl-txt">Model</span>
+    <span class="val-txt">${session.model || 'unknown'}</span>
+  </div>
   <div class="row">
     <span class="lbl-txt">Total input tokens (session)</span>
     <span class="val-txt">${fmt(session.inputTokens)}</span>
