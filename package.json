@@ -3,12 +3,20 @@
   "displayName": "Claude Token Manager",
   "description": "Token usage display and auto memory system for the Claude Code VS Code extension",
   "version": "0.1.0",
-  "publisher": "PowerisTsutusn",
+  "publisher": "PowerisTsutsun",
   "license": "MIT",
-  "icon": "",
+  "icon": "logo.png",
+  "homepage": "https://github.com/PowerisTsutsun/claude-token-manager",
+  "bugs": {
+    "url": "https://github.com/PowerisTsutsun/claude-token-manager/issues"
+  },
+  "galleryBanner": {
+    "color": "#1f2937",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/PowerisTsutsun/claude-token-manager.git"
   },
   "engines": {
     "vscode": "^1.85.0"

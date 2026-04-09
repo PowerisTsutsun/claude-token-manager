@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
+const crypto = __importStar(require("crypto"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const os = __importStar(require("os"));
@@ -58,8 +59,7 @@ function fmt(n) {
     return Math.round(n).toLocaleString('en-US');
 }
 function generateNonce() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    return crypto.randomBytes(32).toString('hex');
 }
 /**
  * Claude Code stores session data under ~/.claude/projects/{encoded-path}/.
@@ -211,6 +211,9 @@ function callAnthropicApi(apiKey, model, system, user) {
                     reject(e);
                 }
             });
+        });
+        req.setTimeout(30000, () => {
+            req.destroy(new Error('Anthropic API request timed out after 30 s'));
         });
         req.on('error', reject);
         req.write(body);
@@ -855,10 +858,10 @@ async function activate(ctx) {
             prompt: 'Enter your Anthropic API key',
             password: true,
             placeHolder: 'sk-ant-api03-…',
-            validateInput: v => v.startsWith('sk-ant-') ? null : 'Key must begin with sk-ant-',
+            validateInput: v => v.trim().startsWith('sk-ant-') ? null : 'Key must begin with sk-ant-',
         });
         if (key) {
-            await ctx.secrets.store(SECRET_KEY_ID, key);
+            await ctx.secrets.store(SECRET_KEY_ID, key.trim());
             vscode.window.showInformationMessage('Claude Token Manager: API key saved to SecretStorage.');
         }
     }));

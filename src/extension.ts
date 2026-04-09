@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -8,7 +9,16 @@ import * as https from 'https';
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CONTEXT_WINDOW      = 200_000;
+// Context windows by model family (all current Claude models are 200k,
+// but we keep a lookup so future models with different limits work automatically)
+const DEFAULT_CONTEXT_WINDOW = 200_000;
+
+function getContextWindow(model: string): number {
+  // All current Claude 3/4 models share a 200k context window.
+  // Add overrides here if a future model differs.
+  if (!model) { return DEFAULT_CONTEXT_WINDOW; }
+  return DEFAULT_CONTEXT_WINDOW;
+}
 const SONNET_IN_PRICE_PM  = 3.0;    // $ per million input  tokens (Sonnet 4.5)
 const SONNET_OUT_PRICE_PM = 15.0;   // $ per million output tokens (Sonnet 4.5)
 const SESSION_IDLE_MS     = 60_000; // 60 s of no writes → session ended
@@ -25,6 +35,7 @@ interface JsonlEntry {
   type:       string;
   message?: {
     role?:    string;
+    model?:   string;
     content?: unknown;
     usage?: {
       input_tokens?:                number;
@@ -48,6 +59,7 @@ interface TurnStats {
 
 interface SessionStats {
   sessionId:          string;
+  model:              string;
   inputTokens:        number;
   outputTokens:       number;
   cacheReadTokens:    number;
@@ -88,8 +100,7 @@ function fmt(n: number): string {
 }
 
 function generateNonce(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return crypto.randomBytes(32).toString('hex');
 }
 
 /**
@@ -182,13 +193,15 @@ function computeSessionStats(entries: JsonlEntry[]): SessionStats | null {
   }
 
   // The most recent assistant turn's input_tokens is the current context window fill.
-  const currentContextSize =
-    assistants[assistants.length - 1].message?.usage?.input_tokens ?? 0;
+  const lastAssistant = assistants[assistants.length - 1];
+  const currentContextSize = lastAssistant.message?.usage?.input_tokens ?? 0;
+  const model = lastAssistant.message?.model ?? '';
 
   const timestamps = sessionEntries.filter(e => e.timestamp).map(e => e.timestamp!);
 
   return {
     sessionId:          lastSessionId,
+    model,
     inputTokens:        totalInput,
     outputTokens:       totalOutput,
     cacheReadTokens:    totalCacheRead,
@@ -244,6 +257,9 @@ function callAnthropicApi(
       });
     });
 
+    req.setTimeout(30_000, () => {
+      req.destroy(new Error('Anthropic API request timed out after 30 s'));
+    });
     req.on('error', reject);
     req.write(body);
     req.end();
@@ -639,10 +655,11 @@ class TokenTracker {
       return;
     }
 
-    const used = this.session.currentContextSize;
-    const pct  = used / CONTEXT_WINDOW;
+    const used  = this.session.currentContextSize;
+    const total = getContextWindow(this.session.model);
+    const pct   = used / total;
 
-    this.statusBar.text = `⚡ ${fmt(used)} / ${fmt(CONTEXT_WINDOW)} tokens`;
+    this.statusBar.text = `⚡ ${fmt(used)} / ${fmt(total)} tokens`;
     this.statusBar.tooltip = [
       `Session: ${this.session.sessionId.slice(0, 8)}…`,
       `Input tokens:  ${fmt(this.session.inputTokens)}`,
@@ -701,7 +718,7 @@ Start a session and token data will appear here automatically within 2 seconds.<
   }
 
   const used       = session.currentContextSize;
-  const total      = CONTEXT_WINDOW;
+  const total      = getContextWindow(session.model);
   const pct        = Math.min(100, Math.round((used / total) * 100));
   const remain     = Math.max(0, total - used);
   const barColor   = pct < 50 ? '#4ec9b0' : pct < 80 ? '#cca700' : '#f48771';
@@ -784,6 +801,10 @@ Start a session and token data will appear here automatically within 2 seconds.<
 </div>
 
 <div class="card">
+  <div class="row">
+    <span class="lbl-txt">Model</span>
+    <span class="val-txt">${session.model || 'unknown'}</span>
+  </div>
   <div class="row">
     <span class="lbl-txt">Total input tokens (session)</span>
     <span class="val-txt">${fmt(session.inputTokens)}</span>
@@ -962,10 +983,10 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
         password:      true,
         placeHolder:   'sk-ant-api03-…',
         validateInput: v =>
-          v.startsWith('sk-ant-') ? null : 'Key must begin with sk-ant-',
+          v.trim().startsWith('sk-ant-') ? null : 'Key must begin with sk-ant-',
       });
       if (key) {
-        await ctx.secrets.store(SECRET_KEY_ID, key);
+        await ctx.secrets.store(SECRET_KEY_ID, key.trim());
         vscode.window.showInformationMessage(
           'Claude Token Manager: API key saved to SecretStorage.'
         );
